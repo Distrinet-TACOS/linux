@@ -44,9 +44,12 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 	bool value_pending;
 	u32 value;
 
+	pr_info("Entering notif irq handler.\n");
+
 	do {
 		value = get_async_notif_value(optee->invoke_fn, &value_valid,
 					      &value_pending);
+		pr_info("Got notification value: %u\n", value);
 		if (!value_valid)
 			break;
 
