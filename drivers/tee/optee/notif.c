@@ -181,8 +181,9 @@ int optee_notif_init(struct optee *optee, u_int max_key, u_int irq)
 	}
 	optee->notif.max_key = max_key;
 
-	rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
-				  0, "optee_notification", optee);
+	pr_info("irq: %u\n", irq);
+	// rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
+	// 			  0, "optee_notification", optee);
 	if (rc)
 		goto err_free_bitmap;
 
