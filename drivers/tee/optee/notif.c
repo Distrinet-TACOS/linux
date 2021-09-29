@@ -22,6 +22,25 @@ struct notif_entry {
 	u_int key;
 };
 
+static struct split_callback {
+	int (*callback)(void);
+	u32 notif_value
+} *split_data = NULL;
+
+int register_callback(int (*callback)(void), u32 notif_value) {
+	if (split_data != NULL) {
+		pr_err("Registering callback failed because it already exists.\n");
+		return -EPERM;
+	}
+
+	split_data = kmalloc(sizeof(struct split_callback), GFP_KERNEL);
+	split_data->callback = callback;
+	split_data->notif_value = notif_value;
+
+	return 0;
+}
+EXPORT_SYMBOL(register_callback);
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -44,17 +63,16 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 	bool value_pending;
 	u32 value;
 
-	pr_info("Entering notif irq handler.\n");
-
 	do {
 		value = get_async_notif_value(optee->invoke_fn, &value_valid,
 					      &value_pending);
-		pr_info("Got notification value: %u\n", value);
 		if (!value_valid)
 			break;
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
+		else if (value == split_data->notif_value)
+			split_data->callback();
 		else
 			optee_notif_send(optee, value);
 	} while (value_pending);
@@ -181,9 +199,8 @@ int optee_notif_init(struct optee *optee, u_int max_key, u_int irq)
 	}
 	optee->notif.max_key = max_key;
 
-	pr_info("irq: %u\n", irq);
-	// rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
-	// 			  0, "optee_notification", optee);
+	rc = request_threaded_irq(irq, notif_irq_handler, notif_irq_thread_fn,
+				  0, "optee_notification", optee);
 	if (rc)
 		goto err_free_bitmap;
 
