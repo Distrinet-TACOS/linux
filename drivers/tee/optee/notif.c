@@ -41,6 +41,11 @@ int register_callback(int (*callback)(void), u32 notif_value) {
 }
 EXPORT_SYMBOL(register_callback);
 
+void unregister_callback(void) {
+	split_data = NULL;
+}
+EXPORT_SYMBOL(unregister_callback);
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -71,7 +76,7 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
-		else if (value == split_data->notif_value)
+		else if (split_data != NULL && value == split_data->notif_value)
 			split_data->callback();
 		else
 			optee_notif_send(optee, value);
