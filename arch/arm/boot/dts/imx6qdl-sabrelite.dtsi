@@ -46,6 +46,10 @@
 
 / {
 	chosen {
+		stdout-path = &uart1;
+	};
+
+	secure-chosen {
 		stdout-path = &uart2;
 	};
 
@@ -720,7 +724,8 @@
 &uart2 {
 	pinctrl-names = "default";
 	pinctrl-0 = <&pinctrl_uart2>;
-	status = "okay";
+	status = "disabled";
+	secure-status = "okay";
 };
 
 &usbh1 {
