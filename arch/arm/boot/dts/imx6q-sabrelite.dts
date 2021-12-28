@@ -47,6 +47,9 @@
 / {
 	model = "Freescale i.MX6 Quad SABRE Lite Board";
 	compatible = "fsl,imx6q-sabrelite", "fsl,imx6q";
+
+	// Added interrupt parent to allow for asynchronous notifications.
+	interrupt-parent = <&intc>;
 };
 
 &sata {
