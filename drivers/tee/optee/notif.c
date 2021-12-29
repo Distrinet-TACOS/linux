@@ -23,26 +23,28 @@ struct notif_entry {
 };
 
 static struct ssp_callback {
-       int (*callback)(void);
-       u32 notif_value;
+	int (*callback)(void);
+	u32 notif_value;
 } *ssp_data = NULL;
 
-int register_callback(int (*callback)(void), u32 notif_value) {
-       if (ssp_data != NULL) {
-               pr_err("Registering callback failed because it already exists.\n");
-               return -EPERM;
-       }
+int register_callback(int (*callback)(void), u32 notif_value)
+{
+	if (ssp_data != NULL) {
+		pr_err("Registering callback failed because it already exists.\n");
+		return -EPERM;
+	}
 
-       ssp_data = kmalloc(sizeof(struct ssp_callback), GFP_KERNEL);
-       ssp_data->callback = callback;
-       ssp_data->notif_value = notif_value;
+	ssp_data = kmalloc(sizeof(struct ssp_callback), GFP_KERNEL);
+	ssp_data->callback = callback;
+	ssp_data->notif_value = notif_value;
 
-       return 0;
+	return 0;
 }
 EXPORT_SYMBOL(register_callback);
 
-void unregister_callback(void) {
-       ssp_data = NULL;
+void unregister_callback(void)
+{
+	ssp_data = NULL;
 }
 EXPORT_SYMBOL(unregister_callback);
 
@@ -60,26 +62,26 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 	return res.a1;
 }
 
+u32 last_value = NULL;
+
 static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 {
 	struct optee *optee = dev_id;
 	bool do_bottom_half = false;
 	bool value_valid;
 	bool value_pending;
-	u32 value;
 
 	do {
-		value = get_async_notif_value(optee->invoke_fn, &value_valid,
+		last_value = get_async_notif_value(optee->invoke_fn, &value_valid,
 					      &value_pending);
 		if (!value_valid)
 			break;
 
-		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
+		if (last_value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF ||
+		    (ssp_data != NULL && ssp_data->notif_value == last_value))
 			do_bottom_half = true;
-		else if (ssp_data != NULL && value == ssp_data->notif_value)
-         		ssp_data->callback();
 		else
-			optee_notif_send(optee, value);
+			optee_notif_send(optee, last_value);
 	} while (value_pending);
 
 	if (do_bottom_half)
@@ -91,7 +93,11 @@ static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
 {
 	struct optee *optee = dev_id;
 
-	optee_do_bottom_half(optee->notif.ctx);
+	if (ssp_data != NULL && ssp_data->notif_value == last_value) {
+		ssp_data->callback();
+	} else {
+		optee_do_bottom_half(optee->notif.ctx);
+	}
 
 	return IRQ_HANDLED;
 }
