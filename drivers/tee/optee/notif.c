@@ -22,6 +22,30 @@ struct notif_entry {
 	u_int key;
 };
 
+static struct ssp_callback {
+       int (*callback)(void);
+       u32 notif_value;
+} *ssp_data = NULL;
+
+int register_callback(int (*callback)(void), u32 notif_value) {
+       if (ssp_data != NULL) {
+               pr_err("Registering callback failed because it already exists.\n");
+               return -EPERM;
+       }
+
+       ssp_data = kmalloc(sizeof(struct ssp_callback), GFP_KERNEL);
+       ssp_data->callback = callback;
+       ssp_data->notif_value = notif_value;
+
+       return 0;
+}
+EXPORT_SYMBOL(register_callback);
+
+void unregister_callback(void) {
+       ssp_data = NULL;
+}
+EXPORT_SYMBOL(unregister_callback);
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -52,6 +76,8 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 
 		if (value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF)
 			do_bottom_half = true;
+		else if (ssp_data != NULL && value == ssp_data->notif_value)
+         		ssp_data->callback();
 		else
 			optee_notif_send(optee, value);
 	} while (value_pending);
