@@ -23,11 +23,11 @@ struct notif_entry {
 };
 
 static struct ssp_callback {
-	int (*callback)(void);
+	int (*callback)(void *);
 	u32 notif_value;
 } *ssp_data = NULL;
 
-int register_callback(int (*callback)(void), u32 notif_value)
+int register_callback(int (*callback)(void *), u32 notif_value)
 {
 	if (ssp_data != NULL) {
 		pr_err("Registering callback failed because it already exists.\n");
@@ -48,6 +48,8 @@ void unregister_callback(void)
 }
 EXPORT_SYMBOL(unregister_callback);
 
+#define stamp(x) isb(); asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(x))
+
 static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 				 bool *value_pending)
 {
@@ -63,6 +65,7 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 }
 
 u32 last_value = NULL;
+static u32 s;
 
 static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 {
@@ -94,7 +97,8 @@ static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
 	struct optee *optee = dev_id;
 
 	if (ssp_data != NULL && ssp_data->notif_value == last_value) {
-		ssp_data->callback();
+		stamp(s);
+		ssp_data->callback(&s);
 	} else {
 		optee_do_bottom_half(optee->notif.ctx);
 	}
