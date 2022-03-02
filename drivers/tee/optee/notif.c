@@ -81,9 +81,10 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 			break;
 
 		if (last_value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF ||
-		    (ssp_data != NULL && ssp_data->notif_value == last_value))
+		    (ssp_data != NULL && ssp_data->notif_value == last_value)) {
+			stamp(s);
 			do_bottom_half = true;
-		else
+		    } else
 			optee_notif_send(optee, last_value);
 	} while (value_pending);
 
@@ -97,7 +98,6 @@ static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
 	struct optee *optee = dev_id;
 
 	if (ssp_data != NULL && ssp_data->notif_value == last_value) {
-		stamp(s);
 		ssp_data->callback(&s);
 	} else {
 		optee_do_bottom_half(optee->notif.ctx);
