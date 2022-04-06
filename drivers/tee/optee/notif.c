@@ -63,6 +63,73 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 }
 
 u32 last_value = NULL;
+static bool inited = false;
+static struct tee_context *ctx = NULL;
+static u32 sess_id = 0;
+
+static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
+{
+	if (ver->impl_id == TEE_IMPL_ID_OPTEE)
+		return 1;
+	else
+		return 0;
+}
+
+void init_pta(void)
+{
+	const uuid_t pta_uuid =
+		UUID_INIT(0xfc93fda1, 0x6bd2, 0x4e6a, 0x89, 0x3c, 0x12, 0x2f,
+			  0x6c, 0x3c, 0x8e, 0x33);
+	struct tee_ioctl_open_session_arg sess_arg;
+	int rc;
+
+	memset(&sess_arg, 0, sizeof(sess_arg));
+
+	/* Open context with OP-TEE driver */
+	ctx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+	if (IS_ERR(ctx))
+		return;
+
+	/* Open session with device enumeration pseudo TA */
+	export_uuid(sess_arg.uuid, &pta_uuid);
+	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
+	sess_arg.num_params = 0;
+
+	rc = tee_client_open_session(ctx, &sess_arg, NULL);
+	if ((rc < 0) || (sess_arg.ret != TEEC_SUCCESS)) {
+		/* Device enumeration pseudo TA not found */
+		pr_err("tee_client_open_session failed, err: %x\n",
+		       sess_arg.ret);
+		return;
+	}
+
+	sess_id = sess_arg.session;
+	inited = true;
+}
+
+static void update(void)
+{
+	struct tee_ioctl_invoke_arg inv_arg;
+	struct tee_param param[4];
+	int rc;
+
+	if (!inited)
+		init_pta();
+
+	memset(&inv_arg, 0, sizeof(inv_arg));
+	memset(&param, 0, sizeof(param));
+
+	inv_arg.func = 0;
+	inv_arg.session = sess_id;
+	inv_arg.num_params = 4;
+
+	memset(&param, 0, sizeof(param));
+
+	rc = tee_client_invoke_func(ctx, &inv_arg, param);
+	if ((rc < 0) || (inv_arg.ret != 0)) {
+		pr_err("PTA_WATCHDOG_UPDATE invoke error: %x.\n", inv_arg.ret);
+	}
+}
 
 static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 {
@@ -84,7 +151,7 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 			optee_notif_send(optee, last_value);
 	} while (value_pending);
 
-	if (do_bottom_half)
+	if (do_bottom_half || last_value == 10)
 		return IRQ_WAKE_THREAD;
 	return IRQ_HANDLED;
 }
@@ -95,6 +162,8 @@ static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
 
 	if (ssp_data != NULL && ssp_data->notif_value == last_value) {
 		ssp_data->callback();
+	} else if (last_value == 10) {
+		update();
 	} else {
 		optee_do_bottom_half(optee->notif.ctx);
 	}
