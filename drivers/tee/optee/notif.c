@@ -24,6 +24,7 @@ struct notif_entry {
 
 static struct ssp_callback {
 	int (*callback)(void *);
+	int (*hard_callback)(void *);
 	u32 notif_value;
 } *ssp_data = NULL;
 
@@ -47,6 +48,21 @@ void unregister_callback(void)
 	ssp_data = NULL;
 }
 EXPORT_SYMBOL(unregister_callback);
+
+int register_hard_callback(int (*callback)(void *), u32 notif_value)
+{
+	if (ssp_data != NULL) {
+		pr_err("Registering hard callback failed because it already exists.\n");
+		return -EPERM;
+	}
+
+	ssp_data = kmalloc(sizeof(struct ssp_callback), GFP_KERNEL);
+	ssp_data->hard_callback = callback;
+	ssp_data->notif_value = notif_value;
+
+	return 0;
+}
+EXPORT_SYMBOL(register_hard_callback);
 
 #define stamp(x) isb(); asm volatile("mrc p15, 0, %0, c9, c13, 0" : "=r"(x))
 
@@ -83,7 +99,11 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 		if (last_value == OPTEE_SMC_ASYNC_NOTIF_VALUE_DO_BOTTOM_HALF ||
 		    (ssp_data != NULL && ssp_data->notif_value == last_value)) {
 			stamp(s);
-			do_bottom_half = true;
+			if (ssp_data->hard_callback) {
+				ssp_data->hard_callback(&s);
+			} else {
+				do_bottom_half = true;
+			}
 		    } else
 			optee_notif_send(optee, last_value);
 	} while (value_pending);

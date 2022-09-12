@@ -619,6 +619,7 @@ struct tee_client_driver {
 		container_of(d, struct tee_client_driver, driver)
 
 int register_callback(int (*callback)(void *), u32 notif_value);
+int register_hard_callback(int (*callback)(void *), u32 notif_value);
 void unregister_callback(void);
 
 #endif /*__TEE_DRV_H*/
