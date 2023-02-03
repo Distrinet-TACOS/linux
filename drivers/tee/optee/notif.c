@@ -62,6 +62,8 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 	return res.a1;
 }
 
+#define PTA_WATCHDOG_SETUP 0
+#define PTA_WATCHDOG_UPDATE 1
 u32 last_value = NULL;
 static bool inited = false;
 static struct tee_context *ctx = NULL;
@@ -85,16 +87,18 @@ void init_pta(void)
 
 	memset(&sess_arg, 0, sizeof(sess_arg));
 
-	/* Open context with OP-TEE driver */
+	pr_info("Open context to watchdog\n");
 	ctx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
-	if (IS_ERR(ctx))
+	if (IS_ERR(ctx)) {
+		pr_err("tee_client_open_context failed for watchdog, err: %x\n", ctx);
 		return;
+	}
 
-	/* Open session with device enumeration pseudo TA */
 	export_uuid(sess_arg.uuid, &pta_uuid);
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
 	sess_arg.num_params = 0;
 
+	pr_info("Open session to watchdog\n");
 	rc = tee_client_open_session(ctx, &sess_arg, NULL);
 	if ((rc < 0) || (sess_arg.ret != TEEC_SUCCESS)) {
 		/* Device enumeration pseudo TA not found */
@@ -119,7 +123,7 @@ static void update(void)
 	memset(&inv_arg, 0, sizeof(inv_arg));
 	memset(&param, 0, sizeof(param));
 
-	inv_arg.func = 0;
+	inv_arg.func = PTA_WATCHDOG_UPDATE;
 	inv_arg.session = sess_id;
 	inv_arg.num_params = 4;
 
@@ -127,7 +131,7 @@ static void update(void)
 
 	rc = tee_client_invoke_func(ctx, &inv_arg, param);
 	if ((rc < 0) || (inv_arg.ret != 0)) {
-		pr_err("PTA_WATCHDOG_UPDATE invoke error: %x.\n", inv_arg.ret);
+		pr_err("PTA_WATCHDOG_UPDATE invoke error: %x\n", inv_arg.ret);
 	}
 }
 

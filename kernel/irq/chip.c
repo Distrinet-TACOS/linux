@@ -927,6 +927,9 @@ void handle_percpu_devid_irq(struct irq_desc *desc)
 
 	if (likely(action)) {
 		trace_irq_handler_entry(irq, action);
+		if (desc->irq_data.hwirq == 4 && chip->irq_eoi) {
+			chip->irq_eoi(&desc->irq_data);
+		}
 		res = action->handler(irq, raw_cpu_ptr(action->percpu_dev_id));
 		trace_irq_handler_exit(irq, action, res);
 	} else {

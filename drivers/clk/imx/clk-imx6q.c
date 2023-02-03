@@ -636,7 +636,8 @@ static void __init imx6q_clocks_init(struct device_node *ccm_node)
 	hws[IMX6QDL_CLK_IPU1_SEL]         = imx_clk_hw_mux("ipu1_sel",         base + 0x3c, 9,  2, ipu_sels,          ARRAY_SIZE(ipu_sels));
 	hws[IMX6QDL_CLK_IPU2_SEL]         = imx_clk_hw_mux("ipu2_sel",         base + 0x3c, 14, 2, ipu_sels,          ARRAY_SIZE(ipu_sels));
 
-	disable_anatop_clocks(anatop_base);
+	// Hangs system on reboot when rebooting from secure world.
+	// disable_anatop_clocks(anatop_base);
 
 	imx_mmdc_mask_handshake(base, 1);
 
