@@ -927,6 +927,9 @@ void handle_percpu_devid_irq(struct irq_desc *desc)
 
 	if (likely(action)) {
 		trace_irq_handler_entry(irq, action);
+		/* Signal End of Interrupt before parking cpu. Otherwise the
+		 * interrupt will retrigger when resetting the cpu.
+		 */
 		if (desc->irq_data.hwirq == 4 && chip->irq_eoi) {
 			chip->irq_eoi(&desc->irq_data);
 		}

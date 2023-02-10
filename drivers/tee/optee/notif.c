@@ -62,12 +62,15 @@ static u32 get_async_notif_value(optee_invoke_fn *invoke_fn, bool *value_valid,
 	return res.a1;
 }
 
-#define PTA_WATCHDOG_SETUP 0
-#define PTA_WATCHDOG_UPDATE 1
+#define PTA_OBSERVER_SETUP 0
+#define PTA_OBSERVER_UPDATE 1
+
+static struct observer {
+	struct tee_context *ctx;
+	u32 sess_id;
+	uint32_t value;
+} observer = {};
 u32 last_value = NULL;
-static bool inited = false;
-static struct tee_context *ctx = NULL;
-static u32 sess_id = 0;
 
 static int optee_ctx_match(struct tee_ioctl_version_data *ver, const void *data)
 {
@@ -83,32 +86,34 @@ void init_pta(void)
 		UUID_INIT(0xfc93fda1, 0x6bd2, 0x4e6a, 0x89, 0x3c, 0x12, 0x2f,
 			  0x6c, 0x3c, 0x8e, 0x33);
 	struct tee_ioctl_open_session_arg sess_arg;
+	struct tee_param param[4];
 	int rc;
 
 	memset(&sess_arg, 0, sizeof(sess_arg));
+	memset(&param, 0, sizeof(param));
 
-	pr_info("Open context to watchdog\n");
-	ctx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
-	if (IS_ERR(ctx)) {
-		pr_err("tee_client_open_context failed for watchdog, err: %x\n", ctx);
+	pr_info("Opening context to observer\n");
+	observer.ctx = tee_client_open_context(NULL, optee_ctx_match, NULL, NULL);
+	if (IS_ERR(observer.ctx)) {
+		pr_err("tee_client_open_context failed for observer, err: %x\n", observer.ctx);
 		return;
 	}
 
 	export_uuid(sess_arg.uuid, &pta_uuid);
 	sess_arg.clnt_login = TEE_IOCTL_LOGIN_PUBLIC;
-	sess_arg.num_params = 0;
+	sess_arg.num_params = 4;
+	param[0].attr = TEE_IOCTL_PARAM_ATTR_TYPE_VALUE_OUTPUT;
 
-	pr_info("Open session to watchdog\n");
-	rc = tee_client_open_session(ctx, &sess_arg, NULL);
+	pr_info("Opening session to observer\n");
+	rc = tee_client_open_session(observer.ctx, &sess_arg, param);
 	if ((rc < 0) || (sess_arg.ret != TEEC_SUCCESS)) {
-		/* Device enumeration pseudo TA not found */
 		pr_err("tee_client_open_session failed, err: %x\n",
 		       sess_arg.ret);
 		return;
 	}
 
-	sess_id = sess_arg.session;
-	inited = true;
+	observer.value = param[0].u.value.a;
+	observer.sess_id = sess_arg.session;
 }
 
 static void update(void)
@@ -117,21 +122,19 @@ static void update(void)
 	struct tee_param param[4];
 	int rc;
 
-	if (!inited)
+	if (!observer.value)
 		init_pta();
 
 	memset(&inv_arg, 0, sizeof(inv_arg));
 	memset(&param, 0, sizeof(param));
 
-	inv_arg.func = PTA_WATCHDOG_UPDATE;
-	inv_arg.session = sess_id;
+	inv_arg.func = PTA_OBSERVER_UPDATE;
+	inv_arg.session = observer.sess_id;
 	inv_arg.num_params = 4;
 
-	memset(&param, 0, sizeof(param));
-
-	rc = tee_client_invoke_func(ctx, &inv_arg, param);
+	rc = tee_client_invoke_func(observer.ctx, &inv_arg, param);
 	if ((rc < 0) || (inv_arg.ret != 0)) {
-		pr_err("PTA_WATCHDOG_UPDATE invoke error: %x\n", inv_arg.ret);
+		pr_err("PTA_OBSERVER_UPDATE invoke error: %x\n", inv_arg.ret);
 	}
 }
 
@@ -155,7 +158,7 @@ static irqreturn_t notif_irq_handler(int irq, void *dev_id)
 			optee_notif_send(optee, last_value);
 	} while (value_pending);
 
-	if (do_bottom_half || last_value == 10)
+	if (do_bottom_half || last_value == observer.value)
 		return IRQ_WAKE_THREAD;
 	return IRQ_HANDLED;
 }
@@ -166,7 +169,7 @@ static irqreturn_t notif_irq_thread_fn(int irq, void *dev_id)
 
 	if (ssp_data != NULL && ssp_data->notif_value == last_value) {
 		ssp_data->callback();
-	} else if (last_value == 10) {
+	} else if (last_value == observer.value) {
 		update();
 	} else {
 		optee_do_bottom_half(optee->notif.ctx);

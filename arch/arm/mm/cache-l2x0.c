@@ -736,10 +736,10 @@ static void l2c310_disable(void)
 	 * If full-line-of-zeros is enabled, we must first disable it in the
 	 * Cortex-A9 auxiliary control register before disabling the L2 cache.
 	 */
-	// if (l2x0_saved_regs.aux_ctrl & L310_AUX_CTRL_FULL_LINE_ZERO)
-	// 	set_auxcr(get_auxcr() & ~(BIT(3) | BIT(2) | BIT(1)));
+	if (l2x0_saved_regs.aux_ctrl & L310_AUX_CTRL_FULL_LINE_ZERO)
+		set_auxcr(get_auxcr() & ~(BIT(3) | BIT(2) | BIT(1)));
 
-	// l2c_disable();
+	l2c_disable();
 }
 
 static void l2c310_resume(void)

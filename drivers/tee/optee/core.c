@@ -602,7 +602,7 @@ static int optee_remove(struct platform_device *pdev)
 	optee_disable_shm_cache(optee);
 
 	optee_notif_uninit(optee);
-	/* 
+	/*
 	 * The two devices have to be unregistered before we can free the
 	 * other resources.
 	 */
