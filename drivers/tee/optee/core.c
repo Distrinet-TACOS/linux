@@ -741,6 +741,8 @@ static int optee_probe(struct platform_device *pdev)
 		}
 		enable_async_notif(optee->invoke_fn);
 		pr_info("Asynchronous notifications enabled\n");
+
+		init_pta();
 	} else {
 		rc = optee_notif_init(optee, 63, 0);
 		if (rc) {
