@@ -51,23 +51,30 @@ static void optee_cq_wait_init(struct optee_call_queue *cq,
 static void optee_cq_wait_for_completion(struct optee_call_queue *cq,
 					 struct optee_call_waiter *w)
 {
+	pr_info("Invoking print function at call.c:cacfce\n");
 	wait_for_completion(&w->c);
 
+	pr_info("Invoking print function at call.c:d4f6d1\n");
 	mutex_lock(&cq->mutex);
 
 	/* Move to end of list to get out of the way for other waiters */
+	pr_info("Invoking print function at call.c:ad7af4\n");
 	list_del(&w->list_node);
+	pr_info("Invoking print function at call.c:95aab3\n");
 	reinit_completion(&w->c);
+	pr_info("Invoking print function at call.c:78c772\n");
 	list_add_tail(&w->list_node, &cq->waiters);
 
+	pr_info("Invoking print function at call.c:9b6a72\n");
 	mutex_unlock(&cq->mutex);
+	pr_info("Invoking print function at call.c:89563d\n");
 }
 
 static void optee_cq_complete_one(struct optee_call_queue *cq)
 {
 	struct optee_call_waiter *w;
 
-	list_for_each_entry(w, &cq->waiters, list_node) {
+	list_for_each_entry (w, &cq->waiters, list_node) {
 		if (!completion_done(&w->c)) {
 			complete(&w->c);
 			break;
@@ -109,7 +116,7 @@ static struct optee_session *find_session(struct optee_context_data *ctxdata,
 {
 	struct optee_session *sess;
 
-	list_for_each_entry(sess, &ctxdata->sess_list, list_node)
+	list_for_each_entry (sess, &ctxdata->sess_list, list_node)
 		if (sess->session_id == session_id)
 			return sess;
 
@@ -130,8 +137,8 @@ u32 optee_do_call_with_arg(struct tee_context *ctx, phys_addr_t parg)
 {
 	struct optee *optee = tee_get_drvdata(ctx->teedev);
 	struct optee_call_waiter w;
-	struct optee_rpc_param param = { };
-	struct optee_call_ctx call_ctx = { };
+	struct optee_rpc_param param = {};
+	struct optee_call_ctx call_ctx = {};
 	u32 ret;
 
 	param.a0 = OPTEE_SMC_CALL_WITH_ARG;
@@ -145,8 +152,7 @@ u32 optee_do_call_with_arg(struct tee_context *ctx, phys_addr_t parg)
 		optee_bm_timestamp();
 
 		optee->invoke_fn(param.a0, param.a1, param.a2, param.a3,
-				 param.a4, param.a5, param.a6, param.a7,
-				 &res);
+				 param.a4, param.a5, param.a6, param.a7, &res);
 		trace_optee_invoke_fn_end(&param, &res);
 
 		optee_bm_timestamp();
@@ -239,10 +245,10 @@ int optee_open_session(struct tee_context *ctx,
 	 * Initialize and add the meta parameters needed when opening a
 	 * session.
 	 */
-	msg_arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT |
-				  OPTEE_MSG_ATTR_META;
-	msg_arg->params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT |
-				  OPTEE_MSG_ATTR_META;
+	msg_arg->params[0].attr =
+		OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
+	msg_arg->params[1].attr =
+		OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
 	memcpy(&msg_arg->params[0].u.value, arg->uuid, sizeof(arg->uuid));
 	msg_arg->params[1].u.value.c = arg->clnt_login;
 
@@ -432,18 +438,32 @@ int optee_stop_async_notif(struct tee_context *ctx)
 void optee_enable_shm_cache(struct optee *optee)
 {
 	struct optee_call_waiter w;
+	struct optee_call_waiter *wp = &w;
+	struct swait_queue *curr;
 
 	/* We need to retry until secure world isn't busy. */
+	pr_info("Invoking print function at call.c:9293bd\n");
+	pr_info("optee->call_queue:\n");
+	list_for_each_entry(wp, &(optee->call_queue.waiters), list_node) {
+		curr = list_first_entry(&(wp->c.wait.task_list), typeof(*curr), task_list);
+		pr_info("    waiter: %s", curr->task->comm);
+	}
 	optee_cq_wait_init(&optee->call_queue, &w);
+	pr_info("Invoking print function at call.c:89fe8b\n");
 	while (true) {
 		struct arm_smccc_res res;
 
+		pr_info("Invoking print function at call.c:735183\n");
 		optee->invoke_fn(OPTEE_SMC_ENABLE_SHM_CACHE, 0, 0, 0, 0, 0, 0,
 				 0, &res);
+		pr_info("Invoking print function at call.c:63fdd9\n");
 		if (res.a0 == OPTEE_SMC_RETURN_OK)
 			break;
+		pr_info("Invoking print function at call.c:2b460d\n");
 		optee_cq_wait_for_completion(&optee->call_queue, &w);
+		pr_info("Invoking print function at call.c:82c4bd\n");
 	}
+	pr_info("Invoking print function at call.c:5aa185\n");
 	optee_cq_wait_final(&optee->call_queue, &w);
 }
 
@@ -481,7 +501,7 @@ void optee_disable_shm_cache(struct optee *optee)
 	optee_cq_wait_final(&optee->call_queue, &w);
 }
 
-#define PAGELIST_ENTRIES_PER_PAGE				\
+#define PAGELIST_ENTRIES_PER_PAGE                                              \
 	((OPTEE_MSG_NONCONTIG_PAGE_SIZE / sizeof(u64)) - 1)
 
 /**
@@ -527,7 +547,7 @@ void optee_fill_pages_list(u64 *dst, struct page **pages, int num_pages,
 	 * because they bear no value data for OP-TEE.
 	 */
 	optee_page = page_to_phys(*pages) +
-		round_down(page_offset, OPTEE_MSG_NONCONTIG_PAGE_SIZE);
+		     round_down(page_offset, OPTEE_MSG_NONCONTIG_PAGE_SIZE);
 
 	while (true) {
 		pages_data->pages_list[n++] = optee_page;
@@ -644,8 +664,8 @@ int optee_shm_register(struct tee_context *ctx, struct tee_shm *shm,
 			      tee_shm_get_page_offset(shm));
 
 	msg_arg->cmd = OPTEE_MSG_CMD_REGISTER_SHM;
-	msg_arg->params->attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT |
-				OPTEE_MSG_ATTR_NONCONTIG;
+	msg_arg->params->attr =
+		OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT | OPTEE_MSG_ATTR_NONCONTIG;
 	msg_arg->params->u.tmem.shm_ref = (unsigned long)shm;
 	msg_arg->params->u.tmem.size = tee_shm_get_size(shm);
 	/*
@@ -653,7 +673,8 @@ int optee_shm_register(struct tee_context *ctx, struct tee_shm *shm,
 	 * store buffer offset from 4k page, as described in OP-TEE ABI.
 	 */
 	msg_arg->params->u.tmem.buf_ptr = virt_to_phys(pages_list) |
-	  (tee_shm_get_page_offset(shm) & (OPTEE_MSG_NONCONTIG_PAGE_SIZE - 1));
+					  (tee_shm_get_page_offset(shm) &
+					   (OPTEE_MSG_NONCONTIG_PAGE_SIZE - 1));
 
 	if (optee_do_call_with_arg(ctx, msg_parg) ||
 	    msg_arg->ret != TEEC_SUCCESS)

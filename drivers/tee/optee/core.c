@@ -742,7 +742,7 @@ static int optee_probe(struct platform_device *pdev)
 		enable_async_notif(optee->invoke_fn);
 		pr_info("Asynchronous notifications enabled\n");
 
-		init_pta();
+		// init_pta();
 	} else {
 		rc = optee_notif_init(optee, 63, 0);
 		if (rc) {
@@ -750,18 +750,24 @@ static int optee_probe(struct platform_device *pdev)
 			return rc;
 		}
 	}
+	pr_info("Invoking print function at core.c:9a0f32\n");
 
 	optee_enable_shm_cache(optee);
+	pr_info("Invoking print function at core.c:0f1a79\n");
 
 	if (optee->sec_caps & OPTEE_SMC_SEC_CAP_DYNAMIC_SHM)
 		pr_info("dynamic shared memory is enabled\n");
+	pr_info("Invoking print function at core.c:220de4\n");
 
 	rc = optee_enumerate_devices(PTA_CMD_GET_DEVICES);
+	pr_info("Invoking print function at core.c:c88978\n");
 	if (rc) {
+		pr_info("Invoking print function at core.c:fbf0cf\n");
 		optee_remove(pdev);
 		return rc;
 	}
 
+	pr_info("Invoking print function at core.c:a485c4\n");
 	pr_info("initialized driver\n");
 	optee_bm_enable();
 	return 0;
